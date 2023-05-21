@@ -1,70 +1,54 @@
-function [P, sgP] = NonLinApproximator (y,r,fun, P_0)
-% P_0 is a line-array with starting guess for values of parameters
-N = size(y, 2);
+function [P, sgP] = NonLinApproximator(y,r,fun, P_)
 
-% p_number = find_arg_number(fun, N); % number of parameters P_i
-p_number = length(P_0);
+% определяем константы (размеры матрицы, итерационные параметры)
+N = size(y,2);
+M = size(P_,2);
+K = size(r,1);
+delta = 1e-6;
+N_i = 1000;
 
-for iterations = 1 : 1000
-
-F = zeros(1, N);
-for ii = 1 : N
-    F(ii) = fun(r(:, ii), P_0); 
-end
-
-% find jacobian of fun
-J = jacobi(fun, r, p_number, P_0);
-
-% equation is G*(P - P_0) = J*(y - fun(r, P_0))
-Y = J'*(y' - F');
-G = J'*J;
-P = P_0' + G\Y;
-
-if isnan(P)
-    break
-end
-
-if iterations > 1
-    if abs(P_0 - P_previous) < 1e-10
-        break
+% вспомогательная функция для расчета Якобиана
+function J = calcJ(P_)
+    J = zeros(N,K);
+    for i = 1:N
+        f = fun(r(:,i),P_);
+        for k = 1:M        
+            B = P_; 
+            B(k) = B(k) + delta*abs(B(k));
+            b = P_;
+            b(k) = b(k) - delta*abs(b(k));
+            J(i,k)=0.5*(fun(r(:,i),B)-fun(r(:,i),b))/delta;
+        end
     end
 end
 
-P_previous = P;
-P_0 = P';
-end
-
-sgP = 'bla bla';
-end
-
-function [number] = find_arg_number(fun, N)
-ii = 1;
-exception_identifier = 'MATLAB:badsubscript';
-while strmatch(exception_identifier, 'MATLAB:badsubscript')
-    exception_identifier = ' ';
-    try fun(zeros(1, N), zeros(1, ii))
-    catch E
-        exception_identifier = E.identifier;
-        ii = ii + 1;
+% инициализация
+for it = 1:N_i  
+    f = zeros(N,1);
+    J = calcJ(P_);
+    
+    % расчет функции F(i)
+    for i = 1:N
+        f(i) = fun(r(:,i),P_);
+    end
+    
+    % вычисление результата и приращения d_b
+    res = y' - f; 
+    d_b = (((J' * J) \ J') * res);
+    
+    % обновление P_
+    if ~any(isnan(d_b)) && max(abs(d_b'./P_)) >= delta
+        P_ = P_ + d_b';  
+    end
+    
+    % условие выхода из цикла
+    if max(abs(d_b'./P_)) < delta || any(isnan(d_b)) 
+        break;
     end
 end
 
-number = ii;
-end
-
-function [J] = jacobi(fun, r, p_number, P_0)
-% numerical method of finding derivative
-h = 1e-6; %step along axis
-N = length(r(1, :));
-
-J = zeros(N, p_number);
-
-for ii = 1 : N
-    for jj = 1 : p_number
-        delta = zeros(1, p_number);
-            delta(jj) = h*abs(P_0(jj));
-            J(ii, jj) = (fun(r(:, ii),P_0 + delta) - fun(r(:, ii),P_0 - delta))/(2*h);
-    end   
-end
+% возвращаем результаты
+P = P_;
+sgP = norm(y' - f)^2*diag(inv(J' * J))';
 
 end
