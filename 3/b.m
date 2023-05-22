@@ -1,37 +1,71 @@
 function Dx = b(mesh)
-% mesh - структура, задающая триангулированную сетку
-% mesh.X - матрица координат вершин сетки
-% mesh.T - матрица треугольников сетки
-
-nNodes = size(mesh.X,1);
-nElements = size(mesh.T,1);
-
-% Создаем пустые массивы индексов
-I = zeros(3*nElements,1);
-J = zeros(3*nElements,1);
-S = zeros(3*nElements,1);
-k = 0;
-
-% Заполняем значения индексов и значений S
-for i = 1:nElements
-    vertices = mesh.T(i,:);
-    x = mesh.X(vertices,:);
-    area = abs(det([ones(3,1) x]))/2; % Площадь треугольника
-    dphi = [-(x(2,2)-x(3,2)), -(x(3,2)-x(1,2)), -(x(1,2)-x(2,2));...
-        x(2,1)-x(3,1), x(3,1)-x(1,1), x(1,1)-x(2,1)]/(2*area); % Производные
-    for j = 1:3
-        k = k + 1;
-        I(k) = vertices(j);
-        J(k) = vertices;
-        S(k) = dphi(j,:);
+    % mesh - структура, задающая триангулированную сетку
+    
+    N = size(mesh.Points,1); 
+    triangles = size(mesh.ConnectivityList,1);
+    
+    line = zeros(9*triangles,1); 
+    column = zeros(9*triangles,1);
+    value = zeros(9*triangles,1); 
+    
+    k = 1;
+    
+    % Производные для каждой точки каждого треугольника
+    for ii = 1:triangles
+    
+        point_number = mesh.ConnectivityList(ii,:);   
+        x = mesh.Points(point_number,:);
+    
+        S = abs(det([ones(3,1) x]))/2; 
+        
+        % Матрица коэффициентов для производных
+        d = [x(1,2) - x(2,2), x(1,2) - x(3,2), x(2,2)-x(3,2)]/(2*S);
+   
+        line(k) = point_number(1);
+        column(k) = point_number(1);
+        value(k) = d(1) - d(2);
+        
+        line(k+1) = point_number(1);
+        column(k+1) = point_number(2);
+        value(k+1) = d(2);
+    
+        line(k+2) = point_number(1);
+        column(k+2) = point_number(3);
+        value(k+2) = -d(1);
+    
+        line(k+3) = point_number(2);
+        column(k+3) = point_number(2);
+        value(k+3) = d(1) + d(3);
+    
+        line(k+4) = point_number(2);
+        column(k+4) = point_number(3);
+        value(k+4) = -d(1);
+    
+        line(k+5) = point_number(2);
+        column(k+5) = point_number(1);
+        value(k+5) = - d(3);
+    
+        line(k+6) = point_number(3);
+        column(k+6) = point_number(3);
+        value(k+6) = d(3) - d(2);
+    
+        line(k+7) = point_number(3);
+        column(k+7) = point_number(1);
+        value(k+7) = - d(3);
+    
+        line(k+8) = point_number(3);
+        column(k+8) = point_number(2);
+        value(k+8) = d(2);
+    
+        k= k+9;
     end
+    
+    % Создаем sparse-матрицу оператора частной по x производной
+    Dx = sparse(line,column,value,N,N);
+    [W,v] = convexHull(mesh);
+    
+    % Зануляем значения на граничных вершинах
+    Dx(W,:) = 0;
+
 end
 
-% Создаем sparse-матрицу оператора частной по x производной
-Dx = sparse(I,J,S,nNodes,nNodes);
-
-% Зануляем значения на граничных вершинах
-boundaryNodes = unique([mesh.freeBoundary; mesh.holes]); % Номера граничных вершин
-Dx(boundaryNodes,:) = 0;
-Dx = Dx - diag(sum(Dx,2));
-end
