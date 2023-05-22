@@ -1,55 +1,69 @@
 function [h] = c(a,b,c)
-
-    % вычисление координат узлов ячейки Вигнера-Зейтца
-    M = cell(7,1);
-    M{1} = [0 0 0];
-    M{2} = [0.5 0.5 0.5];
-    M{3} = [0.5 0.5 0];
-    M{4} = [0.5 0 0.5];
-    M{5} = [0 0.5 0.5];
-    M{6} = [0 0.5 0];
-    M{7} = [0 0 0.5];
+    x =(a+b)/2;
+    y = -(a+c)/2;
+    z = (c+b)/2;
     
-    % вычисление координат центра ячейки Вигнера-Зейтца
-    c_v = (a+b+c)/2;
-    
-    % вычисление периодических векторов ячейки
-    e1 = cross(b,c)/norm(cross(b,c));
-    e2 = cross(c,a)/norm(cross(c,a));
-    e3 = cross(a,b)/norm(cross(a,b));
-    
-    % вычисление координат узлов ячейки Вигнера-Зейтца в новой системе координат
-    Mxyz = zeros(3,7);
-    for i = 1:7
-        Mxyz(:,i) = e1*M{i}(1) + e2*M{i}(2) + e3*M{i}(3);
-    end
-    
-    % построение поверхности ячейки Вигнера-Зейтца
     h = figure;
     hold on;
-    for i = 1:7
-        for j = 1:7
-            if i ~= j
-                r = Mxyz(:,j) - Mxyz(:,i);
-                s1 = cross(r,e1);
-                s2 = cross(r,e2);
-                s3 = cross(r,e3);
-                for k = 1:2
-                    for l = 1:2
-                        for m = 1:2
-                            p = c_v + r*(k-1/2) + s1*(l-1/2) + s2*(m-1/2);
-                            if dot(p-a,r) >= 0 && dot(p-b,r) >= 0 && dot(p-c,r) >= 0
-                                plot3(p(1),p(2),p(3),'k.','MarkerSize',10)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    xlabel('x');
-    ylabel('y');
-    zlabel('z');
-    axis equal;
     grid on;
+    
+    pp = [2*x, -2*x, 2*y, -2*y, 2*z, -2*z, a, -a, b, -b, c, -c, (x-y+z), -x+y-z];
+    
+    connections = [13 4 10 6 12 1
+         1 12 3 8 5 13
+         4 13 5 8 2 10
+         7 1 9 5 11 4
+         10 6 12 3 8 2
+         9 3 14 2 11 5
+         11 4 7 6 14 2
+         9 1 7 6 14 3];
+    
+    vectors = [7, 9, 11, 13, 14, 8, 10, 12];
+    
+    sz = size(connections);
+    points = pp';
+    hexes =[];
+    
+    % Пройдемся по всем шестиугольникам и вычислим точки пересечения плоскостей
+    % перпендикулярных заданным векторам
+    for jj = 1:sz(1) 
+        v1 = points(vectors(jj),:);
+        v2 = points(connections(jj, 6), :);
+        v3 = points(connections(jj, 1), :);
+        w = [Find_inter_faces(v1', v2', v3')]
+    
+        for kk = 1:5
+            v2 = points(connections(jj, kk), :);
+            v3 = points(connections(jj, kk+1), :);
+            x = Find_inter_faces(v1', v2', v3');
+            w = [w x]
+        end
+        % Сразу отображаем полученную поверхность
+        patch('Faces',[1 2 3 4 5 6],'Vertices',w','FaceColor',[0 1 1],'FaceAlpha',0.4);
+        hexes = [hexes; w];
+    
+    end
+    
+    % отображаем векторы, формирующие сетку
+    plot3([0,a(1)],[0,a(2)],[0,a(3)],'-r','LineWidth',2);
+    plot3([0,b(1)],[0,b(2)],[0,b(3)],'-g','LineWidth',2);
+    plot3([0,c(1)],[0,c(2)],[0,c(3)],'-b','LineWidth',2);
+    
+    plot3(pp(1,:), pp(2,:), pp(3,:),'o','LineWidth',2);
+    
+    DT = delaunayTriangulation(points);
+    [W,v] = convexHull(DT);
+    trisurf(W,DT.Points(:,1),DT.Points(:,2),DT.Points(:,3), ...
+           'FaceColor',[1 0 0],'FaceAlpha',0.2)
+    axis equal;
+    hold off
+    
+end
+
+% Функция принимает 3 некомпланарных вектора и ищет точку пересечения 3 плоскостей, которые перпендикулярны каждому из векторов и проходят через их середины.
+function x = Find_inter_faces(v1, v2, v3)
+        A = [v1 v2 v3];
+        q = [norm(v1)^2/2 norm(v2)^2/2 norm(v3)^2/2]';
+        A_ = inv(A');
+        x = A_*q;
 end
